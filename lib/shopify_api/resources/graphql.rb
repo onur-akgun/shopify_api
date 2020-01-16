@@ -4,46 +4,48 @@ require 'graphql/client/http'
 
 module ShopifyAPI
   class GraphQL
+    DEFAULT_SCHEMA_LOCATION_PATH = 'db/shopify_api/graphql_schemas/'
     class << self
-      include ThreadsafeAttributes
-
       delegate :parse, :query, to: :client
 
-      threadsafe_attribute(:_schema_file_path, :_client)
+      attr_reader :schema_location
 
-      def schema_file_path
-        if _schema_file_path_defined?
-          _schema_file_path
-        elsif superclass != Object && superclass.schema_file_path
-          superclass.schema_file_path
+      def initialize_clients
+        # TODO: regex for api version
+        @_client_cache ||= {}
+
+        Dir.glob(schema_location.join("*.json")).each do |schema_file|
+          schema = ::GraphQL::Client.load_schema(schema_file)
+          client = ::GraphQL::Client.new(schema: schema, execute: HTTPClient.new)
+
+          # TODO: unstable
+          api_version = schema_file.match(/(\d{4}-\d{2})\.json$/)[1]
+          @_client_cache[api_version] = client
         end
       end
 
-      def schema_file_path=(api_version, schema_file_path)
-        if File.exists?(schema_file_path)
-          self._schema_file_path = schema_file_path
+      def schema_location=(path)
+        path = Pathname(path)
+        if path.exist?
+          @schema_location = path
         else
-          raise "Schema file #{schema_file_path} does not exist."
+          raise "Schema location #{path} does not exist."
         end
       end
 
-      def client
-        if _client_defined?
-          _client
-        elsif superclass != Object && superclass.client
-          superclass.client
-          else
-          self._client ||= ::GraphQL::Client.new(schema: schema, execute: HTTPClient.new)
-        end
-      end
+      def client(api_version = nil)
+        # TODO: raise if they haven't set `api_version` param or `ShopifyAPI::Base.api_version`, and there's more than
+        # one in the cache
 
-      def schema
-        if _schema_defined?
-          _schema
-        elsif superclass != Object && superclass.schema
-          superclass.schema
+        selected_api_version = api_version || ShopifyAPI::Base.api_version.handle
+        cached_client = @_client_cache[selected_api_version]
+
+        if cached_client
+          cached_client
         else
-          self._schema ||= ::GraphQL::Client.load_schema(schema_file_path) end
+          # TODO: cache miss: call remotely, or force devs to dump schema .json ahead of time?
+          raise "Client for API version #{selected_api_version} not configured"
+        end
       end
     end
 
