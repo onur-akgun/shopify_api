@@ -48,9 +48,12 @@ end
 require 'shopify_api'
 
 task :graphql_client do
+  authed_site_url = ENV['authed_site_url']
+  raise "Required arguments are: authed_site_url" unless [authed_site_url].none?(:nil?)
+
   # call 1: first shop, api version that we have a dump file for
 
-  ShopifyAPI::Base.site = ENV['SHOPIFY_SITE1']
+  ShopifyAPI::Base.site = authed_site_url
   ShopifyAPI::Base.api_version = '2019-04'
   ShopifyAPI::GraphQL.schema_location = 'db/shopify_api/graphql_schemas/'
 
@@ -67,25 +70,25 @@ task :graphql_client do
 
   result = ShopifyAPI::GraphQL.query(SHOP_NAME_QUERY)
   puts result.to_h
+end
 
-  # call 2: changing shop
+task :fetch_and_dump_schema do
+  authed_site_url = ENV['authed_site_url']
+  api_version = ENV['api_version']
+  raise "Required arguments are: authed_site_url and api_verson" unless [authed_site_url, api_version].none?(:nil?)
 
-  ShopifyAPI::Base.site = ENV['SHOPIFY_SITE1'] || ENV['SHOPIFY_SITE2']
   ShopifyAPI::Base.api_version = '2019-07'
-  result = ShopifyAPI::GraphQL.query(SHOP_NAME_QUERY)
-  puts result.to_h
-end
 
-task :fetch_and_dump_schema, [:token, :api_version] do |task, args|
-  puts args
-  # bui
-  ShopifyAPI::Base.site = ENV['SHOPIFY_SITE1']
-  ShopifyAPI::Base.api_version = api_version
-  INTROSPECTION_QUERY = ShopifyAPI::GraphQL.parse(GraphQL::Introspection::INTROSPECTION_QUERY)
-  result = ShopifyAPI::GraphQL.query(INTROSPECTION_QUERY)
-  File.write(ShopifyAPI::GraphQL.schema_location.join("#{api_version}.json"))
-end
+  graphql_api_url = "#{authed_site_url}/admin/api/#{api_version}/graphql.json"
 
-# task :work, [:option, :foo, :bar] do |task, args|
-#   puts "work", args
-# end
+  response = Net::HTTP.post(
+    URI(graphql_api_url),
+    { query: GraphQL::Introspection::INTROSPECTION_QUERY }.to_json,
+    "Content-Type" => "application/json"
+  )
+
+  binding.pry
+
+  # TODO
+  # File.write(ShopifyAPI::GraphQL.schema_location.join("#{api_version}.json"), response.body)
+end
