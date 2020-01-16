@@ -5,27 +5,36 @@ require 'graphql/client/http'
 module ShopifyAPI
   class GraphQL
     DEFAULT_SCHEMA_LOCATION_PATH = 'db/shopify_api/graphql_schemas/'
+
     class << self
       delegate :parse, :query, to: :client
 
       attr_reader :schema_location
 
       def initialize_clients
-        # TODO: regex for api version
         @_client_cache ||= {}
 
         Dir.glob(schema_location.join("*.json")).each do |schema_file|
-          schema = ::GraphQL::Client.load_schema(schema_file)
-          client = ::GraphQL::Client.new(schema: schema, execute: HTTPClient.new)
+          schema_file = Pathname(schema_file)
+          matches = schema_file.basename.to_s.match(/^#{ShopifyAPI::ApiVersion::HANDLE_FORMAT}\.json$/)
 
-          # TODO: unstable
-          api_version = schema_file.match(/(\d{4}-\d{2})\.json$/)[1]
+          if matches
+            api_version = matches[1]
+          else
+            raise "Invalid schema file name `#{schema_file}`. Does not match format of: `<version>.json`."
+          end
+
+          schema = ::GraphQL::Client.load_schema(schema_file.to_s)
+          client = ::GraphQL::Client.new(schema: schema, execute: HTTPClient.new(api_version))
+
+          puts "building #{schema_file} client"
           @_client_cache[api_version] = client
         end
       end
 
       def schema_location=(path)
         path = Pathname(path)
+
         if path.exist?
           @schema_location = path
         else
@@ -50,16 +59,22 @@ module ShopifyAPI
     end
 
     class HTTPClient < ::GraphQL::Client::HTTP
-      # avoid initializing @uri
-      def initialize; end
+      def initialize(api_version)
+        @api_version = api_version
+      end
 
       def headers(_context)
         ShopifyAPI::Base.headers
       end
 
+      def execute(*args)
+        puts uri.request_uri
+        super
+      end
+
       def uri
         ShopifyAPI::Base.site.dup.tap do |uri|
-          uri.path = Base.api_version.construct_graphql_path
+          uri.path = "#{ShopifyAPI::ApiVersion::API_PREFIX}#{@api_version}/#{ShopifyAPI::ApiVersion::GRAPHQL_PATH}"
         end
       end
     end

@@ -5,10 +5,11 @@ module ShopifyAPI
     class ApiVersionNotSetError < StandardError; end
     include Comparable
 
-    HANDLE_FORMAT = /^\d{4}-\d{2}$/.freeze
     UNSTABLE_HANDLE = 'unstable'
+    HANDLE_FORMAT = /((\d{4}-\d{2})|#{UNSTABLE_HANDLE})/.freeze
     UNSTABLE_AS_DATE = Time.utc(3000, 1, 1)
     API_PREFIX = '/admin/api/'
+    GRAPHQL_PATH = 'graphql.json'
     LOOKUP_MODES = [:raise_on_unknown, :define_on_unknown].freeze
 
     class << self
@@ -144,7 +145,7 @@ module ShopifyAPI
     end
 
     def construct_graphql_path
-      construct_api_path('graphql.json')
+      construct_api_path(GRAPHQL_PATH)
     end
 
     def name

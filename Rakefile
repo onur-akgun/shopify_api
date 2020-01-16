@@ -50,14 +50,14 @@ require 'shopify_api'
 task :graphql_client do
   # call 1: first shop, api version that we have a dump file for
 
-  ShopifyAPI::Base.site = "https"
+  ShopifyAPI::Base.site = ENV['SHOPIFY_SITE1']
   ShopifyAPI::Base.api_version = '2019-04'
   ShopifyAPI::GraphQL.schema_location = 'db/shopify_api/graphql_schemas/'
 
   # ShopifyAPI::GraphQL.initialize_client('2019-04') # TODO let them manually pick one?
   ShopifyAPI::GraphQL.initialize_clients
 
-  SHOP_NAME_QUERY = ShopifyAPI::GraphQL.client.parse <<-'GRAPHQL'
+  SHOP_NAME_QUERY = ShopifyAPI::GraphQL.parse <<-'GRAPHQL'
     {
       shop {
         name
@@ -65,25 +65,24 @@ task :graphql_client do
     }
   GRAPHQL
 
-  result = ShopifyAPI::GraphQL.client.query(SHOP_NAME_QUERY)
+  result = ShopifyAPI::GraphQL.query(SHOP_NAME_QUERY)
   puts result.to_h
 
   # call 2: changing shop
 
-  ShopifyAPI::Base.site = 'https'
-  result = ShopifyAPI::GraphQL.client.query(SHOP_NAME_QUERY)
+  ShopifyAPI::Base.site = ENV['SHOPIFY_SITE1'] || ENV['SHOPIFY_SITE2']
+  ShopifyAPI::Base.api_version = '2019-07'
+  result = ShopifyAPI::GraphQL.query(SHOP_NAME_QUERY)
   puts result.to_h
-
-  binding.pry
 end
 
 task :fetch_and_dump_schema, [:token, :api_version] do |task, args|
   puts args
   # bui
-  ShopifyAPI::Base.site = "https"
+  ShopifyAPI::Base.site = ENV['SHOPIFY_SITE1']
   ShopifyAPI::Base.api_version = api_version
-  INTROSPECTION_QUERY = ShopifyAPI::GraphQL.client.parse(GraphQL::Introspection::INTROSPECTION_QUERY)
-  result = ShopifyAPI::GraphQL.client.query(INTROSPECTION_QUERY)
+  INTROSPECTION_QUERY = ShopifyAPI::GraphQL.parse(GraphQL::Introspection::INTROSPECTION_QUERY)
+  result = ShopifyAPI::GraphQL.query(INTROSPECTION_QUERY)
   File.write(ShopifyAPI::GraphQL.schema_location.join("#{api_version}.json"))
 end
 
