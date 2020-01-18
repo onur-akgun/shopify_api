@@ -29,3 +29,5 @@ if ShopifyAPI::Base.respond_to?(:connection_class)
 else
   require 'active_resource/connection_ext'
 end
+
+require 'shopify_api/railtie' if defined?(Rails)

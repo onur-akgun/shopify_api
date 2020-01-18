@@ -4,12 +4,10 @@ require 'graphql/client/http'
 
 module ShopifyAPI
   class GraphQL
-    DEFAULT_SCHEMA_LOCATION_PATH = 'db/shopify_api/graphql_schemas/'
+    DEFAULT_SCHEMA_LOCATION_PATH = Pathname('shopify_graphql_schemas')
 
     class << self
       delegate :parse, :query, to: :client
-
-      attr_reader :schema_location
 
       def initialize_clients
         @_client_cache ||= {}
@@ -27,9 +25,12 @@ module ShopifyAPI
           schema = ::GraphQL::Client.load_schema(schema_file.to_s)
           client = ::GraphQL::Client.new(schema: schema, execute: HTTPClient.new(api_version))
 
-          puts "building #{schema_file} client"
           @_client_cache[api_version] = client
         end
+      end
+
+      def schema_location
+        @schema_location || DEFAULT_SCHEMA_LOCATION_PATH
       end
 
       def schema_location=(path)
@@ -43,17 +44,39 @@ module ShopifyAPI
       end
 
       def client(api_version = nil)
-        # TODO: raise if they haven't set `api_version` param or `ShopifyAPI::Base.api_version`, and there's more than
-        # one in the cache
+        @_client_cache ||= {}
 
         selected_api_version = api_version || ShopifyAPI::Base.api_version.handle
+
+        if @_client_cache.size > 1 && !selected_api_version
+          raise <<~MSG
+            Clients for multiple API versions exist but API version was not specified.
+            Either call the `client` method with an explicit API version (ie: '2020-01')
+            or ensure `ShopifyAPI::Base.api_version` is set.
+
+            Possible clients for versions: #{@_client_cache.keys.join(', ')}
+          MSG
+        end
+
         cached_client = @_client_cache[selected_api_version]
 
         if cached_client
           cached_client
         else
-          # TODO: cache miss: call remotely, or force devs to dump schema .json ahead of time?
-          raise "Client for API version #{selected_api_version} not configured"
+          schema_file = schema_location.join("#{selected_api_version}.json")
+
+          if !schema_file.exist?
+            raise <<~MSG
+              Client for API version #{selected_api_version} does not exist because no schema file exists
+              at `#{schema_file}`.
+
+              To dump the schema file, use the `rake shopify_api:graphql:dump` task.
+            MSG
+          else
+            puts '[WARNING] Client was not pre-initialized. Ensure `ShopifyAPI::GraphQL.initialize_clients` is called during app initialization.'
+            initialize_clients
+            @_client_cache[selected_api_version]
+          end
         end
       end
     end
@@ -65,11 +88,6 @@ module ShopifyAPI
 
       def headers(_context)
         ShopifyAPI::Base.headers
-      end
-
-      def execute(*args)
-        puts uri.request_uri
-        super
       end
 
       def uri

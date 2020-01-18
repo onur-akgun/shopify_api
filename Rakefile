@@ -54,10 +54,8 @@ task :graphql_client do
   # call 1: first shop, api version that we have a dump file for
 
   ShopifyAPI::Base.site = authed_site_url
-  ShopifyAPI::Base.api_version = '2019-04'
-  ShopifyAPI::GraphQL.schema_location = 'db/shopify_api/graphql_schemas/'
+  ShopifyAPI::Base.api_version = '2019-07'
 
-  # ShopifyAPI::GraphQL.initialize_client('2019-04') # TODO let them manually pick one?
   ShopifyAPI::GraphQL.initialize_clients
 
   SHOP_NAME_QUERY = ShopifyAPI::GraphQL.parse <<-'GRAPHQL'
@@ -72,23 +70,4 @@ task :graphql_client do
   puts result.to_h
 end
 
-task :fetch_and_dump_schema do
-  authed_site_url = ENV['authed_site_url']
-  api_version = ENV['api_version']
-  raise "Required arguments are: authed_site_url and api_verson" unless [authed_site_url, api_version].none?(:nil?)
-
-  ShopifyAPI::Base.api_version = '2019-07'
-
-  graphql_api_url = "#{authed_site_url}/admin/api/#{api_version}/graphql.json"
-
-  response = Net::HTTP.post(
-    URI(graphql_api_url),
-    { query: GraphQL::Introspection::INTROSPECTION_QUERY }.to_json,
-    "Content-Type" => "application/json"
-  )
-
-  binding.pry
-
-  # TODO
-  # File.write(ShopifyAPI::GraphQL.schema_location.join("#{api_version}.json"), response.body)
-end
+load 'shopify_api/tasks/graphql.rake'
